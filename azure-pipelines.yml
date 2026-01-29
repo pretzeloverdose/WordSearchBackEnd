@@ -28,7 +28,7 @@ steps:
 - task: SSH@0
   displayName: Deploy to Lightsail
   inputs:
-    sshEndpoint: lightsail-connection
+    sshEndpoint: LightsailSSH
     runOptions: inline
     inline: |
       cd ~/wordsearch
