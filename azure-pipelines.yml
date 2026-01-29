@@ -1,0 +1,36 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+# Build Docker image
+- task: Docker@2
+  displayName: Build Docker image
+  inputs:
+    containerRegistry: DockerHubServiceConnection
+    repository: pretzeloverdose/wordsearch-backend
+    command: build
+    Dockerfile: Dockerfile
+    tags: latest
+
+# Push Docker image to Docker Hub
+- task: Docker@2
+  displayName: Push Docker image
+  inputs:
+    containerRegistry: DockerHubServiceConnection
+    repository: pretzeloverdose/wordsearch-backend
+    command: push
+    tags: latest
+
+# Deploy to Lightsail via SSH
+- task: SSH@0
+  displayName: Deploy to Lightsail
+  inputs:
+    sshEndpoint: lightsail-connection
+    runOptions: inline
+    inline: |
+      cd ~/wordsearch
+      docker compose pull
+      docker compose up -d --remove-orphans
