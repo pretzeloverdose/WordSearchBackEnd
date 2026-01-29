@@ -1,0 +1,25 @@
+# Visual Studio / .NET
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider/IDE
+.idea/
+
+# publish output
+publish/
+
+# User secrets and local settings
+appsettings.Development.json
+secrets.json
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

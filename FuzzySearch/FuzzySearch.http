@@ -1,0 +1,6 @@
+@FuzzySearch_HostAddress = http://localhost:5068
+
+GET {{FuzzySearch_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
