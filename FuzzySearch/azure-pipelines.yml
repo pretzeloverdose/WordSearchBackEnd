@@ -1,0 +1,42 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  dockerRepository: 'pretzeloverdose/wordsearch-backend'
+  tag: 'latest'
+
+steps:
+# 1. Restore + Build + Publish
+- task: DotNetCoreCLI@2
+  displayName: 'Publish .NET 8 API'
+  inputs:
+    command: 'publish'
+    projects: '**/*.csproj'
+    arguments: '--configuration Release -o $(Build.ArtifactStagingDirectory)'
+
+# 2. Build + Push Docker image
+- task: Docker@2
+  displayName: 'Build and Push Docker Image'
+  inputs:
+    command: 'buildAndPush'
+    repository: '$(dockerRepository)'
+    dockerfile: '**/Dockerfile'
+    containerRegistry: 'DockerHubServiceConnection'
+    tags: |
+      $(tag)
+
+# 3. SSH into Lightsail and redeploy
+- task: SSH@0
+  displayName: 'Deploy to AWS Lightsail'
+  inputs:
+    sshEndpoint: 'LightsailSSH'
+    runOptions: 'commands'
+    commands: |
+      cd /home/ubuntu/wordsearch
+      docker compose pull
+      docker compose up -d

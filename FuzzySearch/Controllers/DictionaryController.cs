@@ -52,7 +52,7 @@ namespace FuzzySearch.Controllers
                 return StatusCode(500, "An error occurred while processing your request");
             }
         }
-
+        /*
         [HttpPost("words")]
         public async Task<IActionResult> AddWord([FromBody] string word)
         {
@@ -97,7 +97,7 @@ namespace FuzzySearch.Controllers
                 return StatusCode(500, "An error occurred while bulk adding words");
             }
         }
-
+        */
         [HttpGet("test-connection")]
         public async Task<IActionResult> TestConnection([FromServices] YourDbContext dbContext)
         {

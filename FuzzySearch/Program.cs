@@ -42,13 +42,14 @@ builder.Services.AddSingleton<S3WordService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
+// if (app.Environment.IsDevelopment())
+// {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+// }
 
-app.UseHttpsRedirection();
+// commented out for lightsail deployment nginx
+// app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
