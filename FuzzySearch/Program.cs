@@ -48,12 +48,12 @@ var app = builder.Build();
     app.UseSwaggerUI();
 // }
 
+// Then use:
+app.UseCors("AllowAll");
+
 // commented out for lightsail deployment nginx
 // app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
-
-// Then use:
-app.UseCors("AllowAll");
 
 app.Run();
