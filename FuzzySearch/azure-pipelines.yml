@@ -38,5 +38,6 @@ steps:
     runOptions: 'commands'
     commands: |
       cd /home/ubuntu/wordsearch
-      docker compose pull
-      docker compose up -d
+      docker compose pull 2>&1
+      docker compose up -d 2>&1
+
