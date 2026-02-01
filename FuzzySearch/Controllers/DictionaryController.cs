@@ -226,8 +226,7 @@ namespace FuzzySearch.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error performing fuzzy search on S3 for query: {Query}", request.Query);
-                return StatusCode(500, "An error occurred while processing your request");
+                return HandleException(ex, "Error performing fuzzy search on S3 for query.");
             }
         }
     }
