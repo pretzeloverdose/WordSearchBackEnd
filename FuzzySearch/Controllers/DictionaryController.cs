@@ -178,7 +178,8 @@ namespace FuzzySearch.Controllers
 
                 var qWords = request.Query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 var results = new List<List<SearchResult>>();
-                foreach (var qWord in qWords) {
+                foreach (var qWord in qWords)
+                {
                     var tmp = words.Select(word => new SearchResult
                     {
                         Word = word.Split("\t")[0],
@@ -231,7 +232,7 @@ namespace FuzzySearch.Controllers
                         Distance = FuzzyMatcher.LevenshteinDistance(request.Query, word.Split("\t")[0]),
                         Frequency = int.TryParse(word.Split("\t")[1], out var freq) ? freq : 0
                     })
-                    .Where(r => r.Distance <= request.SimilarityThreshold)
+                    .Where(r => r.Distance <= request.SimilarityThreshold && !r.Word.Equals(request.Query))
                     .OrderBy(r => r.Distance)
                     .ThenByDescending(r => r.Frequency)
                     .ThenBy(r => r.Word)
@@ -251,6 +252,32 @@ namespace FuzzySearch.Controllers
             catch (Exception ex)
             {
                 return HandleException(ex, "Error performing fuzzy search on S3 for query.");
+            }
+        }
+
+        [HttpPost("Search-s3-check-exists")]
+        public async Task<IActionResult> CheckWordExistsS3(
+            [FromBody] string word,
+            [FromServices] S3WordService s3WordService)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(word))
+                    return BadRequest("Word cannot be empty");
+                // Set your S3 bucket and key here, or pass via request
+                string bucketName = "engdictionary";
+                string key = "count_1w.txt";
+                var words = await s3WordService.GetWordsAsync(bucketName, key);
+                bool exists = words.Any(w => w.Split("\t")[0].Equals(word.Trim(), StringComparison.OrdinalIgnoreCase));
+                return Ok(new
+                {
+                    Word = word,
+                    Exists = exists
+                });
+            }
+            catch (Exception ex)
+            {
+                return HandleException(ex, "Error checking word existence on S3.");
             }
         }
     }
