@@ -3,6 +3,7 @@ version: "3.8"
 services:
   wordsearch:
     image: pretzeloverdose/wordsearch-backend:latest
+    container_name: wordsearch-api
     restart: always
     ports:
       - "8080:8080"
