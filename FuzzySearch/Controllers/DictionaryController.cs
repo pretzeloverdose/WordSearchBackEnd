@@ -80,6 +80,7 @@ namespace FuzzySearch.Controllers
                 return HandleException(ex, "Error performing fuzzy search.");
             }
         }
+        /*
         
         [HttpPost("words")]
         public async Task<IActionResult> AddWord([FromBody] string word)
@@ -100,7 +101,6 @@ namespace FuzzySearch.Controllers
             }
         }
 
-        /*
         [HttpPost("words/bulk")]
         public async Task<IActionResult> BulkAddWords([FromBody] List<string> words)
         {
