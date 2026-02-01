@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using System.Data;
 using System.Linq;
+using Microsoft.AspNetCore.Hosting;
 
 namespace FuzzySearch.Controllers
 {
@@ -16,11 +17,39 @@ namespace FuzzySearch.Controllers
     {
         private readonly IDatabaseService _databaseService;
         private readonly ILogger<DictionaryController> _logger;
+        private readonly IWebHostEnvironment _env;
 
-        public DictionaryController(IDatabaseService databaseService, ILogger<DictionaryController> logger)
+        public DictionaryController(IDatabaseService databaseService, ILogger<DictionaryController> logger, IWebHostEnvironment env)
         {
             _databaseService = databaseService;
             _logger = logger;
+            _env = env;
+        }
+
+        private IActionResult HandleException(Exception ex, string userMessage)
+        {
+            // Always log full exception server-side
+            _logger.LogError(ex, "{Message}", userMessage);
+
+            // In development include exception details for easier debugging
+            if (_env.IsDevelopment())
+            {
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = userMessage,
+                    Error = ex.Message,
+                    Exception = ex.GetType().FullName,
+                    StackTrace = ex.StackTrace
+                });
+            }
+
+            // Production: don't leak internals
+            return StatusCode(500, new
+            {
+                Success = false,
+                Message = userMessage
+            });
         }
 
         [HttpPost("search")]
@@ -48,8 +77,7 @@ namespace FuzzySearch.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error performing fuzzy search for query: {Query}", request.Query);
-                return StatusCode(500, "An error occurred while processing your request");
+                return HandleException(ex, "Error performing fuzzy search.");
             }
         }
         
@@ -68,10 +96,10 @@ namespace FuzzySearch.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error adding word: {Word}", word);
-                return StatusCode(500, "An error occurred while adding the word");
+                return HandleException(ex, "Error adding word.");
             }
         }
+
         /*
         [HttpPost("words/bulk")]
         public async Task<IActionResult> BulkAddWords([FromBody] List<string> words)
@@ -93,8 +121,7 @@ namespace FuzzySearch.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error bulk adding words");
-                return StatusCode(500, "An error occurred while bulk adding words");
+                return HandleException(ex, "Error bulk adding words.");
             }
         }
         */
@@ -110,8 +137,7 @@ namespace FuzzySearch.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Database connection test failed.");
-                return StatusCode(500, new { Success = false, Message = "Database connection failed.", Error = ex.Message });
+                return HandleException(ex, "Database connection test failed.");
             }
         }
 
@@ -132,8 +158,7 @@ namespace FuzzySearch.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking pg_trgm extension.");
-                return StatusCode(500, new { Success = false, Message = "Error checking pg_trgm extension.", Error = ex.Message });
+                return HandleException(ex, "Error checking pg_trgm extension.");
             }
         }
 
@@ -179,8 +204,7 @@ namespace FuzzySearch.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error performing fuzzy search on S3 for query: {Query}", request.Query);
-                return StatusCode(500, "An error occurred while processing your request");
+                return HandleException(ex, "Error performing fuzzy search on S3 for query.");
             }
         }
 
