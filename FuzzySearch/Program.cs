@@ -1,12 +1,13 @@
 // Program.cs
-using FuzzySearch.Data;
-using FuzzySearch.Services;
-using System;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.SqlServer;
-using Npgsql.EntityFrameworkCore.PostgreSQL; // Add this using directive at the top of the file
 using Amazon.Extensions.NETCore.Setup; // Add this using directive at the top of the file
 using Amazon.S3;
+using FuzzySearch.Data;
+using FuzzySearch.Services;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.SqlServer;
+using Microsoft.OpenApi.Models;
+using Npgsql.EntityFrameworkCore.PostgreSQL; // Add this using directive at the top of the file
+using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,17 +35,18 @@ builder.Services.AddCors(options =>
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c => { c.AddServer(new OpenApiServer { Url = "/wordsearch" }); });
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonS3>();
 builder.Services.AddSingleton<S3WordService>();
 
 var app = builder.Build();
-
+// Tell ASP.NET Core it's running under /wordsearch
+app.UsePathBase("/wordsearch");
 // Configure the HTTP request pipeline
 // if (app.Environment.IsDevelopment())
 // {
-    app.UseSwagger();
+app.UseSwagger();
     app.UseSwaggerUI();
 // }
 
