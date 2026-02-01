@@ -1,4 +1,4 @@
-	# Visual Studio / .NET
+# Visual Studio / .NET
 .vs/
 bin/
 obj/
@@ -23,3 +23,6 @@ secrets.json
 # OS
 .DS_Store
 Thumbs.db
+
+# ignore runtime env with secrets
+.env

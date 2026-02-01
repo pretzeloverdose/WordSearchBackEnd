@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  wordsearch:
+    image: pretzeloverdose/wordsearch-backend:latest
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      # Mount ubuntu's AWS credentials into the container (read-only).
+      # If the container runs as root this maps to /root/.aws which the SDK will read.
+      - /home/ubuntu/.aws:/root/.aws:ro
+    environment:
+      - AWS_REGION=ap-southeast-2
