@@ -52,6 +52,7 @@ namespace FuzzySearch.Controllers
             });
         }
 
+        /*
         [HttpPost("search")]
         public async Task<IActionResult> FuzzySearch([FromBody] SearchRequest request)
         {
@@ -80,7 +81,6 @@ namespace FuzzySearch.Controllers
                 return HandleException(ex, "Error performing fuzzy search.");
             }
         }
-        /*
         
         [HttpPost("words")]
         public async Task<IActionResult> AddWord([FromBody] string word)
@@ -140,7 +140,7 @@ namespace FuzzySearch.Controllers
                 return HandleException(ex, "Database connection test failed.");
             }
         }
-
+        
         [HttpGet("check-pgtrgm")]
         public async Task<IActionResult> CheckPgTrgm([FromServices] IConfiguration configuration)
         {
