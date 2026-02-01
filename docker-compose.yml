@@ -14,3 +14,4 @@ services:
       - /home/ubuntu/.aws:/root/.aws:ro
     environment:
       - AWS_REGION=ap-southeast-2
+      - AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials
