@@ -1,12 +1,17 @@
-﻿using FuzzySearch.Data;
+﻿using Amazon.Runtime.Internal.Util;
+using Amazon.S3;
+using FuzzySearch.Data;
 using FuzzySearch.Models;
 using FuzzySearch.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using System.Collections.Immutable;
 using System.Data;
 using System.Linq;
-using Microsoft.AspNetCore.Hosting;
+using System.Collections.Generic;
+using System;
 
 namespace FuzzySearch.Controllers
 {
@@ -219,27 +224,51 @@ namespace FuzzySearch.Controllers
                 if (string.IsNullOrWhiteSpace(request.Query))
                     return BadRequest("Query cannot be empty");
 
-                // Set your S3 bucket and key here, or pass via request
                 string bucketName = "engdictionary";
                 string key = "count_1w.txt";
 
-                var words = await s3WordService.GetWordsAsync(bucketName, key);
+                // Fetch parsed entries (word + frequency)
+                var entries = await s3WordService.GetWordEntriesAsync(bucketName, key);
 
-                var results = words
-                    .Select(word => new SearchResult
+                int limit = Math.Max(1, request.Limit);
+                int threshold = (int)Math.Floor(request.SimilarityThreshold);
+
+                // Use a bounded set that keeps the top-K best items.
+                // SortedSet is ordered worst-first via CandidateComparer so Min is the worst candidate.
+                var set = new SortedSet<Candidate>(new CandidateComparer());
+                long seq = 0;
+
+                foreach (var e in entries)
+                {
+                    // Avoid extra allocations here; e.Word is already a string from parsing service
+                    var word = e.Word;
+                    int dist = FuzzyMatcher.LevenshteinDistance(request.Query, (string)word);
+
+                    if (dist > threshold)
+                        continue;
+
+                    var sr = new SearchResult
                     {
-                        Word = word.Split("\t")[0],
-                        Distance = FuzzyMatcher.LevenshteinDistance(request.Query, word.Split("\t")[0]),
-                        Frequency = int.TryParse(word.Split("\t")[1], out var freq) ? freq : 0
-                    })
-                    .Where(r => r.Distance <= request.SimilarityThreshold && !r.Word.Equals(request.Query))
-                    .OrderBy(r => r.Distance)
-                    .ThenByDescending(r => r.Frequency)
-                    .ThenBy(r => r.Word)
-                    .Take(request.Limit)
-                    .ToList();
+                        Word = (string)word,
+                        Distance = dist,
+                        Frequency = (int)e.Frequency
+                    };
 
-                // Optionally, add similarity calculation
+                    var cand = new Candidate(sr, seq++);
+
+                    // Add candidate and ensure size bounded to 'limit'
+                    set.Add(cand);
+                    if (set.Count > limit)
+                    {
+                        // set.Min is the worst (according to CandidateComparer)
+                        set.Remove(set.Min);
+                    }
+                }
+
+                // Now produce results ordered by best-first: distance asc, freq desc, word asc
+                var results = set.Reverse().Select(c => c.Result).ToList();
+
+                // Compute similarity if desired
                 results.ForEach(r => r.Similarity = 1.0 - (double)r.Distance / Math.Max(request.Query.Length, r.Word.Length));
 
                 return Ok(new
@@ -255,30 +284,47 @@ namespace FuzzySearch.Controllers
             }
         }
 
-        [HttpPost("Search-s3-check-exists")]
-        public async Task<IActionResult> CheckWordExistsS3(
-            [FromBody] string word,
-            [FromServices] S3WordService s3WordService)
+        // Helper candidate wrapper and comparer for bounding top-K
+        private sealed class Candidate
         {
-            try
+            public SearchResult Result { get; }
+            public long Seq { get; }
+
+            public Candidate(SearchResult result, long seq)
             {
-                if (string.IsNullOrWhiteSpace(word))
-                    return BadRequest("Word cannot be empty");
-                // Set your S3 bucket and key here, or pass via request
-                string bucketName = "engdictionary";
-                string key = "count_1w.txt";
-                var words = await s3WordService.GetWordsAsync(bucketName, key);
-                bool exists = words.Any(w => w.Split("\t")[0].Equals(word.Trim(), StringComparison.OrdinalIgnoreCase));
-                return Ok(new
-                {
-                    Word = word,
-                    Exists = exists
-                });
-            }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "Error checking word existence on S3.");
+                Result = result;
+                Seq = seq;
             }
         }
+
+        private sealed class CandidateComparer : IComparer<Candidate>
+        {
+            // Compare such that "worse" candidates sort before "better" candidates:
+            // worse = larger distance, lower frequency, lexicographically larger word.
+            // This makes SortedSet.Min the worst candidate and easy to remove when size > K.
+            public int Compare(Candidate? x, Candidate? y)
+            {
+                if (ReferenceEquals(x, y)) return 0;
+                if (x is null) return -1;
+                if (y is null) return 1;
+
+                // 1) distance: larger distance is worse -> should come first (smaller in SortedSet ordering)
+                int cmp = y!.Result.Distance.CompareTo(x!.Result.Distance);
+                if (cmp != 0) return cmp;
+
+                // 2) frequency: lower frequency is worse -> should come first
+                cmp = x.Result.Frequency.CompareTo(y.Result.Frequency);
+                if (cmp != 0) return cmp;
+
+                // 3) word lexicographic: lexicographically larger is worse -> should come first
+                cmp = y.Result.Word.CompareTo(x.Result.Word);
+                if (cmp != 0) return cmp;
+
+                // 4) sequence to ensure deterministic uniqueness
+                return x.Seq.CompareTo(y.Seq);
+            }
+        }
+
+        // ... remaining endpoints ...
     }
 }
