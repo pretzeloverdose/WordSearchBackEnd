@@ -20,9 +20,9 @@ public partial class S3WordService
         _s3Client = new AmazonS3Client(RegionEndpoint.GetBySystemName(region));
     }
 
-    public async Task<List<string>> GetWordsAsync(string bucketName, string key, int wordLength)
+    public async Task<List<dynamic>> GetWordsAsync(string bucketName, string key, int wordLength)
     {
-        var words = new List<string>();
+        var words = new List<dynamic>();
         var response = await _s3Client.GetObjectAsync(bucketName, key);
         using var reader = new StreamReader(response.ResponseStream, Encoding.UTF8);
         while (!reader.EndOfStream)
@@ -32,9 +32,16 @@ public partial class S3WordService
             int entryLength = lineTrimmed.IndexOf('\t');
             if (!string.IsNullOrWhiteSpace(line))
             {
-                if (entryLength <= wordLength + 2 && entryLength >= wordLength - 2)
+                if (entryLength <= wordLength + 1 && entryLength >= wordLength - 1)
                 {
-                    words.Add(lineTrimmed);
+                    long freq = 0;
+                    if (entryLength > 0)
+                    {
+                        var freqPart = lineTrimmed.Substring(entryLength + 1);
+                        if (!string.IsNullOrEmpty(freqPart) && long.TryParse(freqPart, out var f))
+                            freq = f;
+                    }
+                    words.Add(new { Word = lineTrimmed.Substring(0, entryLength), Freq = freq});
                 }
             }
         }
@@ -49,22 +56,9 @@ public partial class S3WordService
 
         foreach (var line in lines)
         {
-            int tab = line.IndexOf('\t');
 
-            string word;
-            long freq = 0;
-
-            if (tab >= 0)
-            {
-                word = line.Substring(0, tab);
-                var freqPart = line.Substring(tab + 1);
-                if (!string.IsNullOrEmpty(freqPart) && long.TryParse(freqPart, out var f))
-                    freq = f;
-            }
-            else
-            {
-                word = line;
-            }
+            string word = line.Word;
+            long freq = line.Freq;
 
             result.Add(new WordEntry(
                 word,           // object word

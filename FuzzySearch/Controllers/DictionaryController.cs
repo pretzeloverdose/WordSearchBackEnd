@@ -188,9 +188,9 @@ namespace FuzzySearch.Controllers
                 {
                     var tmp = words.Select(word => new SearchResult
                     {
-                        Word = word.Split("\t")[0],
-                        Distance = FuzzyMatcher.LevenshteinDistance(qWord, word.Split("\t")[0]),
-                        Frequency = long.TryParse(word.Split("\t").ElementAtOrDefault(1), out var freq) ? freq : 0
+                        Word = word.Word,
+                        Distance = FuzzyMatcher.LevenshteinDistance(qWord, word.Word),
+                        Frequency = word.Freq ?? 0
                     })
                     .Where(r => r.Distance <= request.SimilarityThreshold && r.Frequency > 10000000)
                     .OrderBy(r => r.Distance)
