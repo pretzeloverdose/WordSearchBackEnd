@@ -20,7 +20,7 @@ public partial class S3WordService
         _s3Client = new AmazonS3Client(RegionEndpoint.GetBySystemName(region));
     }
 
-    public async Task<List<string>> GetWordsAsync(string bucketName, string key)
+    public async Task<List<string>> GetWordsAsync(string bucketName, string key, int wordLength)
     {
         var words = new List<string>();
         var response = await _s3Client.GetObjectAsync(bucketName, key);
@@ -28,16 +28,23 @@ public partial class S3WordService
         while (!reader.EndOfStream)
         {
             var line = await reader.ReadLineAsync();
+            string lineTrimmed = line.Trim() ?? string.Empty;
+            int entryLength = lineTrimmed.IndexOf('\t');
             if (!string.IsNullOrWhiteSpace(line))
-                words.Add(line.Trim());
+            {
+                if (entryLength <= wordLength + 2 && entryLength >= wordLength - 2)
+                {
+                    words.Add(lineTrimmed);
+                }
+            }
         }
         return words;
     }
 
     // New helper that returns parsed entries (avoids string.Split allocations)
-    public async Task<List<WordEntry>> GetWordEntriesAsync(string bucketName, string key)
+    public async Task<List<WordEntry>> GetWordEntriesAsync(string bucketName, string key, int wordLength)
     {
-        var lines = await GetWordsAsync(bucketName, key); // reuse existing fetch
+        var lines = await GetWordsAsync(bucketName, key, wordLength); // reuse existing fetch
         var result = new List<WordEntry>(lines.Count);
 
         foreach (var line in lines)

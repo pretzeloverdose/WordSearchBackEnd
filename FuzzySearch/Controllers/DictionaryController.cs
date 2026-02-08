@@ -12,6 +12,7 @@ using System.Data;
 using System.Linq;
 using System.Collections.Generic;
 using System;
+using System.Diagnostics;
 
 namespace FuzzySearch.Controllers
 {
@@ -179,7 +180,7 @@ namespace FuzzySearch.Controllers
                 // Set your S3 bucket and key here, or pass via request
                 string bucketName = "engdictionary";
                 string key = "count_1w.txt";
-                var words = await s3WordService.GetWordsAsync(bucketName, key);
+                var words = await s3WordService.GetWordsAsync(bucketName, key, request.Query.Length);
 
                 var qWords = request.Query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 var results = new List<List<SearchResult>>();
@@ -227,56 +228,57 @@ namespace FuzzySearch.Controllers
                 string bucketName = "engdictionary";
                 string key = "count_1w.txt";
 
-                // Fetch parsed entries (word + frequency)
-                var entries = await s3WordService.GetWordEntriesAsync(bucketName, key);
-
-                int limit = Math.Max(1, request.Limit);
-                int threshold = (int)Math.Floor(request.SimilarityThreshold);
-
-                // Use a bounded set that keeps the top-K best items.
-                // SortedSet is ordered worst-first via CandidateComparer so Min is the worst candidate.
-                var set = new SortedSet<Candidate>(new CandidateComparer());
-                long seq = 0;
-
-                foreach (var e in entries)
+                using (new FuzzySearch.Utilities.OperationTimer(_logger, "Total FuzzySearchS3"))
                 {
-                    // Avoid extra allocations here; e.Word is already a string from parsing service
-                    var word = e.Word;
-                    int dist = FuzzyMatcher.LevenshteinDistance(request.Query, (string)word);
-
-                    if (dist > threshold)
-                        continue;
-
-                    var sr = new SearchResult
+                    // 1) Fetch and parse
+                    using (new FuzzySearch.Utilities.OperationTimer(_logger, "GetWordEntriesAsync"))
                     {
-                        Word = (string)word,
-                        Distance = dist,
-                        Frequency = (int)e.Frequency
-                    };
+                        // returns parsed WordEntry (Word + Frequency)
+                    }
+                    var gScan = Stopwatch.StartNew();
+                    var entries = await s3WordService.GetWordEntriesAsync(bucketName, key, request.Query.Length);
 
-                    var cand = new Candidate(sr, seq++);
+                    // 2) Scan & compute distances (hot loop)
+                    int limit = Math.Max(1, request.Limit);
+                    int threshold = (int)Math.Floor(request.SimilarityThreshold);
 
-                    // Add candidate and ensure size bounded to 'limit'
-                    set.Add(cand);
-                    if (set.Count > limit)
+                    var set = new SortedSet<Candidate>(new CandidateComparer());
+                    long seq = 0;
+                    int scanned = 0, passedThreshold = 0;
+                    gScan.Stop();
+                    _logger.LogInformation("s3WordService took " + gScan.Elapsed.TotalMilliseconds + "ms");
+                    var swScan = Stopwatch.StartNew();
+                    foreach (var e in entries)
                     {
-                        // set.Min is the worst (according to CandidateComparer)
-                        set.Remove(set.Min);
+                        scanned++;
+                        var word = e.Word;
+                        int dist = FuzzyMatcher.LevenshteinDistance(request.Query, (string)word);
+                        if (dist > threshold)
+                            continue;
+
+                        passedThreshold++;
+                        var sr = new SearchResult
+                        {
+                            Word = (string)word,
+                            Distance = dist,
+                            Frequency = (int)e.Frequency
+                        };
+                        var cand = new Candidate(sr, seq++);
+                        set.Add(cand);
+                        if (set.Count > limit)
+                            set.Remove(set.Min);
+                    }
+                    swScan.Stop();
+                    _logger.LogInformation("Scanned {Scanned} entries, {Passed} candidates in {Ms} ms", scanned, passedThreshold, swScan.Elapsed.TotalMilliseconds);
+
+                    // 3) Materialize results (small)
+                    using (new FuzzySearch.Utilities.OperationTimer(_logger, "Materialize/Compute Similarity"))
+                    {
+                        var results = set.Reverse().Select(c => c.Result).ToList();
+                        results.ForEach(r => r.Similarity = 1.0 - (double)r.Distance / Math.Max(request.Query.Length, r.Word.Length));
+                        return Ok(new { Query = request.Query, Results = results, TotalCount = results.Count });
                     }
                 }
-
-                // Now produce results ordered by best-first: distance asc, freq desc, word asc
-                var results = set.Reverse().Select(c => c.Result).ToList();
-
-                // Compute similarity if desired
-                results.ForEach(r => r.Similarity = 1.0 - (double)r.Distance / Math.Max(request.Query.Length, r.Word.Length));
-
-                return Ok(new
-                {
-                    Query = request.Query,
-                    Results = results,
-                    TotalCount = results.Count
-                });
             }
             catch (Exception ex)
             {
